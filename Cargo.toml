@@ -1,4 +1,6 @@
 [package]
+description = "ternary-matmul - SuperInstance ecosystem crate"
+repository = "https://github.com/SuperInstance/ternary-matmul"
 name = "ternary-matmul"
 version = "0.1.0"
 edition = "2024"
