@@ -7,4 +7,3 @@ license = "MIT OR Apache-2.0"
 edition = "2021"
 
 [dependencies]
-ternary-types = { git = "https://github.com/SuperInstance/ternary-types.git", features = ["std"] }
