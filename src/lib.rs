@@ -6,7 +6,12 @@
 //! ranging from naive O(n³) multiplication to cache-friendly tiled approaches,
 //! XNOR+popcount fast paths, and Strassen's algorithm for large matrices.
 //!
-//! All arithmetic uses explicit Z₃ matching on trit pairs — never modular tricks.
+//! The elementwise trit operations ([`trit_mul`], [`trit_add`], [`trit_neg`])
+//! are exact Z₃ operations done by explicit match on trit pairs — never modular
+//! tricks. Matrix multiplication, by contrast, accumulates the per-element trit
+//! products in full-precision `i32` and quantizes each result back to a trit by
+//! sign: this is ternary-weight multiplication with sign quantization, *not*
+//! multiplication over the ring Z₃ (which would reduce each sum modulo 3).
 
 use std::time::Instant;
 
@@ -137,7 +142,16 @@ pub fn trit_add(a: i8, b: i8) -> i8 {
 
 /// Naive O(n³) ternary matrix multiplication.
 ///
-/// Computes C = A × B using Z₃ arithmetic with explicit match arms.
+/// Each entry `C[i,j]` is the ordinary integer dot product of the `i`-th row of
+/// `a` and the `j`-th column of `b`, where every per-element product is the
+/// [`trit_mul`] result (which equals the plain integer product for `{-1,0,1}`).
+/// Those products are summed in `i32` and the total is quantized back to a trit
+/// by sign (negative → -1, zero → 0, positive → +1).
+///
+/// Note: this is *not* multiplication over the ring Z₃, which would reduce the
+/// accumulated sum modulo 3. It is ternary-weight multiplication with
+/// sign-based quantization — the same semantics used by [`tiled_matmul`],
+/// [`xnor_matmul`] and [`strassen_matmul`].
 pub fn naive_matmul(a: &TernaryMatrix, b: &TernaryMatrix) -> TernaryMatrix {
     assert_eq!(a.cols, b.rows, "dimension mismatch");
     let m = a.rows;
@@ -538,6 +552,31 @@ mod tests {
         assert_eq!(c.get(0, 1), 1);
         assert_eq!(c.get(1, 0), -1);
         assert_eq!(c.get(1, 1), -1);
+    }
+
+    /// Pins the multiplication semantics on a case where sign-based quantization
+    /// and true ring-Z₃ (mod-3) arithmetic *diverge*, so the contract can't drift
+    /// silently.
+    ///
+    /// Worked example: `A = [[1, 1, 1]]` (1×3), `B = [[1],[1],[1]]` (3×1), all +1.
+    /// Per-element products via [`trit_mul`]: all `+1·+1 = +1`.
+    /// Accumulated integer dot product: `1 + 1 + 1 = 3`.
+    ///   * This crate (sign quantization via [`round_to_trit`]): `3 ≥ 1 → +1`.
+    ///   * True ring-Z₃ (reduce the sum mod 3): `3 ≡ 0 → 0`.
+    ///
+    /// The two disagree, so asserting `+1` documents and locks the intended
+    /// sign-quantized behavior (shared by naive/tiled/xnor/strassen).
+    #[test]
+    fn test_matmul_sign_quantization_diverges_from_z3() {
+        let a = TernaryMatrix::from_vec(1, 3, vec![1, 1, 1]);
+        let b = TernaryMatrix::from_vec(3, 1, vec![1, 1, 1]);
+        let c = naive_matmul(&a, &b);
+        assert_eq!(c.rows(), 1);
+        assert_eq!(c.cols(), 1);
+        // Integer dot product 3 quantizes to +1, NOT 0 as mod-3 Z₃ would give.
+        assert_eq!(c.get(0, 0), 1);
+        // Tiled shares the same sign-quantized semantics.
+        assert_eq!(tiled_matmul(&a, &b, 2).get(0, 0), 1);
     }
 
     #[test]
