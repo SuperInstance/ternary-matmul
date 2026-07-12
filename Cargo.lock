@@ -5,3 +5,11 @@ version = 4
 [[package]]
 name = "ternary-matmul"
 version = "0.1.0"
+dependencies = [
+ "ternary-types",
+]
+
+[[package]]
+name = "ternary-types"
+version = "0.2.0"
+source = "git+https://github.com/SuperInstance/ternary-types.git#51b41852ed5747bb295d3697f6896ea79d9a1bf1"

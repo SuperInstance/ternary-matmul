@@ -21,14 +21,22 @@ pub struct TernaryMatrix {
 impl TernaryMatrix {
     /// Create a new zero-filled ternary matrix.
     pub fn zeros(rows: usize, cols: usize) -> Self {
-        Self { rows, cols, data: vec![0; rows * cols] }
+        Self {
+            rows,
+            cols,
+            data: vec![0; rows * cols],
+        }
     }
 
     /// Create from a Vec<i8>. Panics if any element is not in {-1, 0, 1}.
     pub fn from_vec(rows: usize, cols: usize, data: Vec<i8>) -> Self {
         assert_eq!(data.len(), rows * cols, "data length mismatch");
         for &v in &data {
-            assert!(v == -1 || v == 0 || v == 1, "element {} not in {{-1, 0, 1}}", v);
+            assert!(
+                v == -1 || v == 0 || v == 1,
+                "element {} not in {{-1, 0, 1}}",
+                v
+            );
         }
         Self { rows, cols, data }
     }
@@ -36,14 +44,18 @@ impl TernaryMatrix {
     /// Create a random ternary matrix using a simple seed-based RNG.
     pub fn random(rows: usize, cols: usize, seed: u64) -> Self {
         let mut s = seed;
-        let data: Vec<i8> = (0..rows * cols).map(|_| {
-            s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-            match (s >> 62) % 3 {
-                0 => -1,
-                1 => 0,
-                _ => 1,
-            }
-        }).collect();
+        let data: Vec<i8> = (0..rows * cols)
+            .map(|_| {
+                s = s
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
+                match (s >> 62) % 3 {
+                    0 => -1,
+                    1 => 0,
+                    _ => 1,
+                }
+            })
+            .collect();
         Self { rows, cols, data }
     }
 
@@ -56,8 +68,12 @@ impl TernaryMatrix {
         m
     }
 
-    pub fn rows(&self) -> usize { self.rows }
-    pub fn cols(&self) -> usize { self.cols }
+    pub fn rows(&self) -> usize {
+        self.rows
+    }
+    pub fn cols(&self) -> usize {
+        self.cols
+    }
 
     /// Get element at (r, c).
     pub fn get(&self, r: usize, c: usize) -> i8 {
@@ -86,14 +102,14 @@ impl TernaryMatrix {
 pub fn trit_mul(a: i8, b: i8) -> i8 {
     match (a, b) {
         (-1, -1) => 1,
-        (-1,  0) => 0,
-        (-1,  1) => -1,
-        ( 0, -1) => 0,
-        ( 0,  0) => 0,
-        ( 0,  1) => 0,
-        ( 1, -1) => -1,
-        ( 1,  0) => 0,
-        ( 1,  1) => 1,
+        (-1, 0) => 0,
+        (-1, 1) => -1,
+        (0, -1) => 0,
+        (0, 0) => 0,
+        (0, 1) => 0,
+        (1, -1) => -1,
+        (1, 0) => 0,
+        (1, 1) => 1,
         _ => unreachable!(),
     }
 }
@@ -102,15 +118,15 @@ pub fn trit_mul(a: i8, b: i8) -> i8 {
 #[inline(always)]
 pub fn trit_add(a: i8, b: i8) -> i8 {
     match (a, b) {
-        (-1, -1) => 1,   // -2 mod 3 = 1
-        (-1,  0) => -1,
-        (-1,  1) => 0,
-        ( 0, -1) => -1,
-        ( 0,  0) => 0,
-        ( 0,  1) => 1,
-        ( 1, -1) => 0,
-        ( 1,  0) => 1,
-        ( 1,  1) => -1,  // 2 mod 3 = -1
+        (-1, -1) => 1, // -2 mod 3 = 1
+        (-1, 0) => -1,
+        (-1, 1) => 0,
+        (0, -1) => -1,
+        (0, 0) => 0,
+        (0, 1) => 1,
+        (1, -1) => 0,
+        (1, 0) => 1,
+        (1, 1) => -1, // 2 mod 3 = -1
         _ => unreachable!(),
     }
 }
@@ -174,7 +190,10 @@ pub fn tiled_matmul(a: &TernaryMatrix, b: &TernaryMatrix, tile: usize) -> Ternar
         }
     }
 
-    let data: Vec<i8> = acc.iter().map(|&v| TernaryMatrix::round_to_trit(v)).collect();
+    let data: Vec<i8> = acc
+        .iter()
+        .map(|&v| TernaryMatrix::round_to_trit(v))
+        .collect();
     TernaryMatrix::from_vec(m, n, data)
 }
 
@@ -189,7 +208,7 @@ pub fn tiled_matmul(a: &TernaryMatrix, b: &TernaryMatrix, tile: usize) -> Ternar
 /// Returns `None` if any zero is found in either matrix.
 pub fn xnor_matmul(a: &TernaryMatrix, b: &TernaryMatrix) -> Option<TernaryMatrix> {
     // Verify no zeros
-    if a.data.iter().any(|&v| v == 0) || b.data.iter().any(|&v| v == 0) {
+    if a.data.contains(&0) || b.data.contains(&0) {
         return None;
     }
     assert_eq!(a.cols, b.rows, "dimension mismatch");
@@ -199,7 +218,7 @@ pub fn xnor_matmul(a: &TernaryMatrix, b: &TernaryMatrix) -> Option<TernaryMatrix
 
     // Pack rows of A and columns of B into u64 bitmaps
     let bits_needed = k;
-    let u64_count = (bits_needed + 63) / 64;
+    let u64_count = bits_needed.div_ceil(64);
 
     // Pack: -1 → 0 bit, +1 → 1 bit
     let pack = |vals: &[i8]| -> Vec<u64> {
@@ -212,29 +231,37 @@ pub fn xnor_matmul(a: &TernaryMatrix, b: &TernaryMatrix) -> Option<TernaryMatrix
         packed
     };
 
-    let a_packed: Vec<Vec<u64>> = (0..m).map(|i| {
-        let row = &a.data[i * k..(i + 1) * k];
-        pack(row)
-    }).collect();
+    let a_packed: Vec<Vec<u64>> = (0..m)
+        .map(|i| {
+            let row = &a.data[i * k..(i + 1) * k];
+            pack(row)
+        })
+        .collect();
 
     // Pack B columns (transpose)
-    let b_packed: Vec<Vec<u64>> = (0..n).map(|j| {
-        let col: Vec<i8> = (0..k).map(|p| b.get(p, j)).collect();
-        pack(&col)
-    }).collect();
+    let b_packed: Vec<Vec<u64>> = (0..n)
+        .map(|j| {
+            let col: Vec<i8> = (0..k).map(|p| b.get(p, j)).collect();
+            pack(&col)
+        })
+        .collect();
 
     let mut c = TernaryMatrix::zeros(m, n);
-    for i in 0..m {
-        for j in 0..n {
+    for (i, a_row) in a_packed.iter().enumerate() {
+        for (j, b_col) in b_packed.iter().enumerate() {
             let mut total_agree = 0i32;
-            for b_idx in 0..u64_count {
-                let xnor = !(a_packed[i][b_idx] ^ b_packed[j][b_idx]);
-                let bits_in_word = if b_idx == u64_count - 1 && bits_needed % 64 != 0 {
+            for (b_idx, (ab, bb)) in a_row.iter().zip(b_col.iter()).enumerate() {
+                let xnor = !(ab ^ bb);
+                let bits_in_word = if b_idx == u64_count - 1 && !bits_needed.is_multiple_of(64) {
                     bits_needed % 64
                 } else {
                     64
                 };
-                let mask = if bits_in_word == 64 { !0u64 } else { (1u64 << bits_in_word) - 1 };
+                let mask = if bits_in_word == 64 {
+                    !0u64
+                } else {
+                    (1u64 << bits_in_word) - 1
+                };
                 total_agree += (xnor & mask).count_ones() as i32;
             }
             // agree = positions with same sign, disagree = k - agree
@@ -259,16 +286,32 @@ struct IntMatrix {
 }
 
 impl IntMatrix {
-    fn zeros(n: usize) -> Self { Self { n, data: vec![0; n * n] } }
+    fn zeros(n: usize) -> Self {
+        Self {
+            n,
+            data: vec![0; n * n],
+        }
+    }
     fn from_ternary(m: &TernaryMatrix) -> Self {
-        Self { n: m.rows, data: m.data.iter().map(|&v| v as i32).collect() }
+        Self {
+            n: m.rows,
+            data: m.data.iter().map(|&v| v as i32).collect(),
+        }
     }
     fn to_ternary(&self) -> TernaryMatrix {
-        let data: Vec<i8> = self.data.iter().map(|&v| TernaryMatrix::round_to_trit(v)).collect();
+        let data: Vec<i8> = self
+            .data
+            .iter()
+            .map(|&v| TernaryMatrix::round_to_trit(v))
+            .collect();
         TernaryMatrix::from_vec(self.n, self.n, data)
     }
-    fn get(&self, r: usize, c: usize) -> i32 { self.data[r * self.n + c] }
-    fn set(&mut self, r: usize, c: usize, v: i32) { self.data[r * self.n + c] = v; }
+    fn get(&self, r: usize, c: usize) -> i32 {
+        self.data[r * self.n + c]
+    }
+    fn set(&mut self, r: usize, c: usize, v: i32) {
+        self.data[r * self.n + c] = v;
+    }
 }
 
 fn int_add(a: &IntMatrix, b: &IntMatrix) -> IntMatrix {
@@ -300,8 +343,12 @@ fn int_naive_mul(a: &IntMatrix, b: &IntMatrix) -> IntMatrix {
 
 fn int_split(m: &IntMatrix) -> [IntMatrix; 4] {
     let half = m.n / 2;
-    let mut qs = [IntMatrix::zeros(half), IntMatrix::zeros(half),
-                  IntMatrix::zeros(half), IntMatrix::zeros(half)];
+    let mut qs = [
+        IntMatrix::zeros(half),
+        IntMatrix::zeros(half),
+        IntMatrix::zeros(half),
+        IntMatrix::zeros(half),
+    ];
     for i in 0..half {
         for j in 0..half {
             qs[0].set(i, j, m.get(i, j));
@@ -339,13 +386,25 @@ fn int_strassen(a: &IntMatrix, b: &IntMatrix, threshold: usize) -> IntMatrix {
     let aq = int_split(a);
     let bq = int_split(b);
 
-    let m1 = int_strassen(&int_add(&aq[0], &aq[3]), &int_add(&bq[0], &bq[3]), threshold);
+    let m1 = int_strassen(
+        &int_add(&aq[0], &aq[3]),
+        &int_add(&bq[0], &bq[3]),
+        threshold,
+    );
     let m2 = int_strassen(&int_add(&aq[2], &aq[3]), &bq[0], threshold);
     let m3 = int_strassen(&aq[0], &int_sub(&bq[1], &bq[3]), threshold);
     let m4 = int_strassen(&aq[3], &int_sub(&bq[2], &bq[0]), threshold);
     let m5 = int_strassen(&int_add(&aq[0], &aq[1]), &bq[3], threshold);
-    let m6 = int_strassen(&int_sub(&aq[2], &aq[0]), &int_add(&bq[0], &bq[1]), threshold);
-    let m7 = int_strassen(&int_sub(&aq[1], &aq[3]), &int_add(&bq[2], &bq[3]), threshold);
+    let m6 = int_strassen(
+        &int_sub(&aq[2], &aq[0]),
+        &int_add(&bq[0], &bq[1]),
+        threshold,
+    );
+    let m7 = int_strassen(
+        &int_sub(&aq[1], &aq[3]),
+        &int_add(&bq[2], &bq[3]),
+        threshold,
+    );
 
     let c11 = int_add(&int_sub(&int_add(&m1, &m4), &m5), &m7);
     let c12 = int_add(&m3, &m5);
@@ -383,7 +442,12 @@ pub fn strassen_matmul(a: &TernaryMatrix, b: &TernaryMatrix, threshold: usize) -
 pub fn add_mat(a: &TernaryMatrix, b: &TernaryMatrix) -> TernaryMatrix {
     assert_eq!(a.rows, b.rows);
     assert_eq!(a.cols, b.cols);
-    let data: Vec<i8> = a.data.iter().zip(&b.data).map(|(&x, &y)| trit_add(x, y)).collect();
+    let data: Vec<i8> = a
+        .data
+        .iter()
+        .zip(&b.data)
+        .map(|(&x, &y)| trit_add(x, y))
+        .collect();
     TernaryMatrix::from_vec(a.rows, a.cols, data)
 }
 
@@ -391,10 +455,15 @@ pub fn add_mat(a: &TernaryMatrix, b: &TernaryMatrix) -> TernaryMatrix {
 pub fn sub_mat(a: &TernaryMatrix, b: &TernaryMatrix) -> TernaryMatrix {
     assert_eq!(a.rows, b.rows);
     assert_eq!(a.cols, b.cols);
-    let data: Vec<i8> = a.data.iter().zip(&b.data).map(|(&x, &y)| {
-        let neg_y = trit_neg(y);
-        trit_add(x, neg_y)
-    }).collect();
+    let data: Vec<i8> = a
+        .data
+        .iter()
+        .zip(&b.data)
+        .map(|(&x, &y)| {
+            let neg_y = trit_neg(y);
+            trit_add(x, neg_y)
+        })
+        .collect();
     TernaryMatrix::from_vec(a.rows, a.cols, data)
 }
 
@@ -516,11 +585,16 @@ mod tests {
         let mut b = TernaryMatrix::random(4, 4, 456);
         // Ensure no zeros
         for v in a.data.iter_mut().chain(b.data.iter_mut()) {
-            if *v == 0 { *v = -1; }
+            if *v == 0 {
+                *v = -1;
+            }
         }
         let naive = naive_matmul(&a, &b);
         let xnor = xnor_matmul(&a, &b).expect("should succeed for binary matrices");
-        assert_eq!(naive, xnor, "XNOR path should match naive for binary matrices");
+        assert_eq!(
+            naive, xnor,
+            "XNOR path should match naive for binary matrices"
+        );
     }
 
     #[test]
@@ -569,7 +643,7 @@ mod tests {
         let c = naive_matmul(&a, &b);
         assert_eq!(c.get(0, 0), -1); // 1 * -1 = -1
         assert_eq!(c.get(3, 3), -1); // -1 * 1 = -1
-        // All other elements should be 0
+                                     // All other elements should be 0
         for i in 0..4 {
             for j in 0..4 {
                 if !((i == 0 && j == 0) || (i == 3 && j == 3)) {
@@ -585,7 +659,7 @@ mod tests {
         let b = TernaryMatrix::from_vec(2, 2, vec![1, 1, -1, -1]);
         let sum = add_mat(&a, &b);
         assert_eq!(sum.get(0, 0), -1); // 1+1 = -1 in Z₃
-        assert_eq!(sum.get(0, 1), 0);  // -1+1 = 0
+        assert_eq!(sum.get(0, 1), 0); // -1+1 = 0
         let diff = sub_mat(&a, &b);
         // a - b = a + (-b)
         assert_eq!(diff.get(0, 0), 0); // 1 - 1 = 0
