@@ -531,12 +531,17 @@ mod tests {
 
     #[test]
     fn test_trit_add() {
-        assert_eq!(trit_add(-1, -1), 1);
+        // All nine arms of the Z₃ addition table, with the modular-arithmetic
+        // rationale for the two non-obvious wraps.
+        assert_eq!(trit_add(-1, -1), 1); // -2 ≡ 1 (mod 3)
+        assert_eq!(trit_add(-1, 0), -1);
         assert_eq!(trit_add(-1, 1), 0);
-        assert_eq!(trit_add(1, 1), -1);
+        assert_eq!(trit_add(0, -1), -1);
         assert_eq!(trit_add(0, 0), 0);
+        assert_eq!(trit_add(0, 1), 1);
         assert_eq!(trit_add(1, -1), 0);
         assert_eq!(trit_add(1, 0), 1);
+        assert_eq!(trit_add(1, 1), -1); // 2 ≡ -1 (mod 3)
     }
 
     #[test]
@@ -589,15 +594,26 @@ mod tests {
         assert_eq!(c2, a, "I × A should equal A");
     }
 
+    /// Non-commutativity must be checked on actual *values*, not just dimensions —
+    /// the previous version only compared `rows()` and would pass even if matmul
+    /// returned garbage (verified by sabotage: zeroing out the accumulation left
+    /// the old test green while breaking a real test).
+    ///
+    /// A = [[1,1],[1,0]], B = [[0,1],[1,1]]. Hand-derived (integer dot product →
+    /// sign-quantized trit):
+    ///   AB = [[1,1],[0,1]]    BA = [[1,0],[1,1]]
     #[test]
-    fn test_commutativity_check_fails_for_non_square() {
-        // Non-square: A×B ≠ B×A in general (dimensions don't even match)
-        let a = TernaryMatrix::from_vec(2, 3, vec![1, 0, -1, 1, 1, 0]);
-        let b = TernaryMatrix::from_vec(3, 2, vec![1, -1, 0, 1, -1, 0]);
+    fn test_matmul_is_not_commutative() {
+        let a = TernaryMatrix::from_vec(2, 2, vec![1, 1, 1, 0]);
+        let b = TernaryMatrix::from_vec(2, 2, vec![0, 1, 1, 1]);
         let ab = naive_matmul(&a, &b);
         let ba = naive_matmul(&b, &a);
-        // Dimensions differ: AB is 2×2, BA is 3×3
-        assert_ne!(ab.rows(), ba.rows());
+        assert_ne!(ab, ba, "matrix multiplication is not commutative");
+        // Pin specific differing entries so a wrong accumulator is caught.
+        assert_eq!(ab.get(1, 0), 0, "AB[1,0] = 1*0 + 0*1 = 0");
+        assert_eq!(ba.get(1, 0), 1, "BA[1,0] = 1*1 + 1*1 = 2 → +1");
+        assert_eq!(ab.get(0, 1), 1, "AB[0,1] = 1*1 + 1*1 = 2 → +1");
+        assert_eq!(ba.get(0, 1), 0, "BA[0,1] = 0*1 + 1*0 = 0");
     }
 
     #[test]
@@ -721,5 +737,78 @@ mod tests {
         let b = TernaryMatrix::from_vec(3, 3, vec![1, -1, 0, 1, 0, -1, -1, 1, 1]);
         let c = naive_matmul(&a, &b);
         assert_eq!(c, TernaryMatrix::zeros(3, 3));
+    }
+
+    /// `round_to_trit` boundaries via tiny hand-derived 1×k · k×1 products.
+    ///   sum = +1 → +1,  sum = -1 → -1,  sum = 0 → 0,
+    ///   sum = +3 → +1 (large positive),  sum = -3 → -1 (large negative).
+    /// These exercise the sign clamp at both ends and the exact-zero case.
+    #[test]
+    fn test_round_to_trit_boundaries() {
+        let row = |v: &[i8]| TernaryMatrix::from_vec(1, v.len(), v.to_vec());
+        let col = |v: &[i8]| TernaryMatrix::from_vec(v.len(), 1, v.to_vec());
+
+        // exact +1
+        assert_eq!(naive_matmul(&row(&[1]), &col(&[1])).get(0, 0), 1);
+        // exact -1
+        assert_eq!(naive_matmul(&row(&[-1]), &col(&[1])).get(0, 0), -1);
+        // exact 0
+        assert_eq!(naive_matmul(&row(&[1, -1]), &col(&[1, 1])).get(0, 0), 0);
+        // large positive: 1+1+1 = 3 → +1
+        assert_eq!(
+            naive_matmul(&row(&[1, 1, 1]), &col(&[1, 1, 1])).get(0, 0),
+            1
+        );
+        // large negative: -1-1-1 = -3 → -1
+        assert_eq!(
+            naive_matmul(&row(&[-1, -1, -1]), &col(&[1, 1, 1])).get(0, 0),
+            -1
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "not in {-1, 0, 1}")]
+    fn test_from_vec_rejects_invalid_element() {
+        // 2 is not a valid trit
+        let _ = TernaryMatrix::from_vec(1, 2, vec![1, 2]);
+    }
+
+    #[test]
+    #[should_panic(expected = "data length mismatch")]
+    fn test_from_vec_rejects_length_mismatch() {
+        // 3 elements requested for a 2×2 (4-element) matrix
+        let _ = TernaryMatrix::from_vec(2, 2, vec![1, 0, -1]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion failed")]
+    fn test_set_rejects_invalid_value() {
+        let mut m = TernaryMatrix::zeros(2, 2);
+        m.set(0, 0, 5);
+    }
+
+    #[test]
+    #[should_panic(expected = "dimension mismatch")]
+    fn test_naive_matmul_rejects_dimension_mismatch() {
+        let a = TernaryMatrix::from_vec(2, 3, vec![1, 0, -1, 1, 1, 0]); // a.cols = 3
+        let b = TernaryMatrix::from_vec(2, 2, vec![1, -1, 0, 1]); // b.rows = 2 != 3
+        let _ = naive_matmul(&a, &b);
+    }
+
+    #[test]
+    #[should_panic(expected = "Strassen requires square A")]
+    fn test_strassen_rejects_non_square() {
+        let a = TernaryMatrix::from_vec(3, 2, vec![1, 0, -1, 1, 1, 0]); // 3×2, not square
+        let b = TernaryMatrix::from_vec(2, 2, vec![1, -1, 0, 1]);
+        let _ = strassen_matmul(&a, &b, 2);
+    }
+
+    #[test]
+    #[should_panic(expected = "Strassen requires power-of-2 dimensions")]
+    fn test_strassen_rejects_non_power_of_two() {
+        // 3×3 (square) but 3 is not a power of two and 3 > threshold(2)
+        let a = TernaryMatrix::from_vec(3, 3, vec![1, -1, 0, 1, 0, -1, -1, 1, 1]);
+        let b = TernaryMatrix::from_vec(3, 3, vec![0, 1, -1, 1, 1, 0, -1, 0, 1]);
+        let _ = strassen_matmul(&a, &b, 2);
     }
 }
