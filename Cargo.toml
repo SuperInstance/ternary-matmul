@@ -3,8 +3,7 @@ description = "ternary-matmul - SuperInstance ecosystem crate"
 repository = "https://github.com/SuperInstance/ternary-matmul"
 name = "ternary-matmul"
 version = "0.1.0"
-license = "MIT OR Apache-2.0"
+license = "MIT"
 edition = "2021"
 
 [dependencies]
-ternary-types = { git = "https://github.com/SuperInstance/ternary-types.git", features = ["std"] }
